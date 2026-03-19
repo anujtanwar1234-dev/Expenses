@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hydrate — Water Tracker</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3CradialGradient id='a' cx='42%25' cy='35%25' r='65%25'%3E%3Cstop offset='0%25' stop-color='%237dd3fc'/%3E%3Cstop offset='40%25' stop-color='%2338bdf8'/%3E%3Cstop offset='75%25' stop-color='%230ea5e9'/%3E%3Cstop offset='100%25' stop-color='%231e40af'/%3E%3C/radialGradient%3E%3CradialGradient id='b' cx='35%25' cy='30%25' r='40%25'%3E%3Cstop offset='0%25' stop-color='%23fff' stop-opacity='.9'/%3E%3Cstop offset='100%25' stop-color='%23fff' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cpath d='M50 8C50 8 18 38 16 58c-2 18 13 34 34 34s36-16 34-34C82 38 50 8 50 8z' fill='url(%23a)'/%3E%3Cpath d='M50 8C50 8 18 38 16 58c-2 18 13 34 34 34s36-16 34-34C82 38 50 8 50 8z' fill='url(%23b)'/%3E%3Cellipse cx='37' cy='35' rx='9' ry='14' fill='%23fff' opacity='.55' transform='rotate(-18 37 35)'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #38bdf8;
+    --accent2: #0ea5e9;
+    --accent-glow: rgba(56,189,248,0.15);
+    --text: #e2f0fb;
+    --muted: #5b7a9a;
+    --danger: #f87171;
+    --success: #34d399;
+    --warn: #fbbf24;
+    --wave1: #1d4ed8;
+    --wave2: #2563eb;
+    --font-head: 'Syne', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── BACKGROUND ── */
+  .bg-orbs {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  }
+  .orb {
+    position: absolute; border-radius: 50%;
+    filter: blur(80px); opacity: 0.12;
+    animation: drift 14s ease-in-out infinite alternate;
+  }
+  .orb1 { width:500px;height:500px; background:#1d4ed8; top:-100px; left:-100px; animation-delay:0s; }
+  .orb2 { width:400px;height:400px; background:#06b6d4; bottom:-80px; right:-80px; animation-delay:-5s; }
+  .orb3 { width:300px;height:300px; background:#3b82f6; top:40%;left:60%; animation-delay:-9s; }
+  @keyframes drift { from{transform:translate(0,0)} to{transform:translate(30px,40px)} }
+
+  /* ── LAYOUT ── */
+  .app { position: relative; z-index:1; max-width: 480px; margin: 0 auto; padding: 24px 16px 100px; }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 28px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-head); font-size: 1.6rem; font-weight: 800;
+    color: var(--accent); letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--text); }
+  .logo-icon { width: 36px; height: 36px; flex-shrink: 0; filter: drop-shadow(0 2px 8px rgba(56,189,248,0.45)); }
+  .streak-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 6px 14px; font-size: 0.8rem; font-weight: 600;
+    color: var(--warn);
+  }
+
+  /* ── GLASS CARD ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background: linear-gradient(135deg, rgba(56,189,248,0.04) 0%, transparent 60%);
+    border-radius: inherit;
+  }
+
+  /* ── GOAL PROGRESS ── */
+  .goal-section { text-align: center; padding: 8px 0 16px; }
+  .goal-label { font-size: 0.75rem; text-transform:uppercase; letter-spacing:2px; color: var(--muted); margin-bottom: 16px; font-family: var(--font-head); }
+
+  /* ── WAVE CONTAINER ── */
+  .wave-wrap {
+    position: relative;
+    width: 180px; height: 180px;
+    margin: 0 auto 16px;
+  }
+  .wave-svg-wrap {
+    width: 180px; height: 180px;
+    position: relative;
+  }
+  .wave-svg-wrap svg {
+    width: 180px; height: 180px;
+    filter: drop-shadow(0 0 18px rgba(56,189,248,0.35));
+  }
+  .wave-center {
+    position: absolute; inset:0;
+    display: flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:2; pointer-events:none;
+  }
+  .wave-ml { font-family:var(--font-head); font-size:2rem; font-weight:800; line-height:1; color:#fff; text-shadow: 0 1px 8px rgba(0,0,0,0.5); }
+  .wave-unit { font-size:0.75rem; color:rgba(255,255,255,0.75); font-weight:500; margin-top:2px; text-shadow:0 1px 4px rgba(0,0,0,0.4); }
+
+  .goal-stats {
+    display: flex; justify-content: center; gap: 28px;
+  }
+  .goal-stat { text-align: center; }
+  .goal-stat-val { font-family:var(--font-head); font-size:1.2rem; font-weight:700; }
+  .goal-stat-lbl { font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+
+  .pct-bar-wrap { margin: 14px 0 4px; }
+  .pct-bar {
+    width:100%; height:6px; background:var(--surface2); border-radius:10px; overflow:hidden;
+  }
+  .pct-bar-fill {
+    height:100%; background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius:10px; transition: width 0.6s ease;
+    box-shadow: 0 0 8px rgba(56,189,248,0.5);
+  }
+  .pct-text { font-size:0.75rem; color:var(--muted); text-align:right; margin-top:4px; }
+
+  /* ── QUICK ADD ── */
+  .section-title {
+    font-family:var(--font-head); font-size:0.8rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:2px; color:var(--muted);
+    margin-bottom:12px;
+  }
+  .quick-btns {
+    display: flex; flex-wrap: wrap; gap: 10px;
+  }
+  .quick-btn {
+    flex: 1 1 calc(33% - 10px); min-width: 80px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px 8px; cursor: pointer;
+    text-align: center; transition: all 0.2s; position:relative; overflow:hidden;
+    font-family: var(--font-body);
+  }
+  .quick-btn:hover { border-color: var(--accent); background: var(--accent-glow); transform: translateY(-2px); }
+  .quick-btn:active { transform: scale(0.96); }
+  .quick-btn.custom-add-btn {
+    border-style: dashed; color: var(--muted);
+  }
+  .quick-btn.custom-add-btn:hover { color: var(--accent); }
+  .quick-btn .btn-ml { font-family:var(--font-head); font-size:1.1rem; font-weight:700; color: var(--text); }
+  .quick-btn .btn-label { font-size:0.65rem; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:1px; }
+  .quick-btn.delete-mode { border-color: var(--danger); }
+  .quick-btn .del-x {
+    display:none; position:absolute; top:6px; right:8px;
+    color: var(--danger); font-size:0.75rem; font-weight:700; cursor:pointer;
+  }
+  .quick-btn.delete-mode .del-x { display:block; }
+
+  /* ── REMINDER CARD ── */
+  .reminder-row {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .reminder-info h3 { font-family:var(--font-head); font-size:0.95rem; font-weight:700; }
+  .reminder-info p { font-size:0.75rem; color:var(--muted); margin-top:2px; }
+  .toggle-wrap { display:flex; gap:10px; align-items:center; }
+  .toggle {
+    width:48px; height:26px; background:var(--border); border-radius:13px;
+    position:relative; cursor:pointer; transition:background 0.3s;
+  }
+  .toggle.on { background:var(--accent2); }
+  .toggle::after {
+    content:''; position:absolute; top:3px; left:3px;
+    width:20px; height:20px; background:#fff; border-radius:50%;
+    transition:transform 0.3s; box-shadow:0 1px 4px rgba(0,0,0,0.3);
+  }
+  .toggle.on::after { transform:translateX(22px); }
+
+  .interval-row {
+    display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;
+  }
+  .interval-btn {
+    flex:1; min-width:60px; padding:8px 4px; background:var(--surface2);
+    border:1px solid var(--border); border-radius:10px; cursor:pointer;
+    font-size:0.75rem; text-align:center; color:var(--muted); transition:all 0.2s;
+    font-family:var(--font-body);
+  }
+  .interval-btn.active, .interval-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-glow); }
+
+  /* ── HISTORY ── */
+  .history-list { display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; }
+  .history-list::-webkit-scrollbar { width:4px; }
+  .history-list::-webkit-scrollbar-track { background:transparent; }
+  .history-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+  .history-item {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 14px; background:var(--surface2); border-radius:12px;
+    border-left:3px solid var(--accent2);
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+  .history-item .h-time { font-size:0.75rem; color:var(--muted); }
+  .history-item .h-ml { font-family:var(--font-head); font-weight:700; color:var(--accent); }
+  .history-item .h-del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:0.85rem; padding:4px; border-radius:6px; transition:color 0.2s; }
+  .history-item .h-del:hover { color:var(--danger); }
+  .empty-history { text-align:center; color:var(--muted); font-size:0.85rem; padding:20px 0; }
+
+  /* ── SETTINGS (GOAL / CUSTOM) ── */
+  .input-row { display:flex; gap:10px; margin-top:10px; }
+  .input-field {
+    flex:1; background:var(--surface2); border:1px solid var(--border);
+    border-radius:12px; padding:10px 14px; color:var(--text);
+    font-family:var(--font-body); font-size:0.9rem; outline:none;
+    transition:border-color 0.2s;
+  }
+  .input-field:focus { border-color:var(--accent); }
+  .input-field::placeholder { color:var(--muted); }
+  .btn-primary {
+    background:var(--accent2); color:#fff; border:none; border-radius:12px;
+    padding:10px 18px; cursor:pointer; font-family:var(--font-head);
+    font-weight:700; font-size:0.85rem; transition:all 0.2s;
+    white-space:nowrap;
+  }
+  .btn-primary:hover { background:var(--accent); transform:translateY(-1px); }
+  .btn-danger { background:var(--surface2); border:1px solid var(--danger); color:var(--danger); border-radius:12px; padding:8px 14px; cursor:pointer; font-family:var(--font-head); font-weight:700; font-size:0.8rem; transition:all 0.2s; }
+  .btn-danger:hover { background:rgba(248,113,113,0.1); }
+
+  /* ── STATS CARD ── */
+  .stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .stat-box { background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:14px; text-align:center; }
+  .stat-box .sv { font-family:var(--font-head); font-size:1.4rem; font-weight:800; }
+  .stat-box .sl { font-size:0.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
+  .sv.green { color:var(--success); }
+  .sv.blue { color:var(--accent); }
+  .sv.warn { color:var(--warn); }
+
+  /* ── TABS ── */
+  .tabs { display:flex; gap:6px; margin-bottom:16px; }
+  .tab {
+    flex:1; padding:9px 4px; background:var(--surface2); border:1px solid var(--border);
+    border-radius:12px; cursor:pointer; font-family:var(--font-head); font-size:0.78rem;
+    font-weight:700; color:var(--muted); text-align:center; transition:all 0.2s;
+    text-transform:uppercase; letter-spacing:1px;
+  }
+  .tab.active { background:var(--accent-glow); border-color:var(--accent); color:var(--accent); }
+
+  /* ── TOAST ── */
+  .toast {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px);
+    background:var(--surface); border:1px solid var(--accent); border-radius:14px;
+    padding:12px 24px; font-family:var(--font-head); font-weight:700; font-size:0.9rem;
+    color:var(--accent); z-index:999; transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    white-space:nowrap; box-shadow:0 8px 32px rgba(0,0,0,0.4);
+  }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  .toast.warn { color:var(--warn); border-color:var(--warn); }
+  .toast.success { color:var(--success); border-color:var(--success); }
+
+  /* ── RIPPLE ── */
+  .ripple {
+    position:absolute; border-radius:50%; background:rgba(56,189,248,0.3);
+    transform:scale(0); animation:rippleAnim 0.6s linear; pointer-events:none;
+  }
+  @keyframes rippleAnim { to{transform:scale(4);opacity:0;} }
+
+  /* ── NOTIFICATION BADGE ── */
+  .notif-badge {
+    display:inline-flex; align-items:center; gap:4px;
+    background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3);
+    border-radius:8px; padding:4px 10px; font-size:0.72rem; color:var(--warn);
+    margin-top:8px;
+  }
+
+  /* ── DAILY VIEW ── */
+  .hour-timeline { display:flex; flex-direction:column; gap:4px; }
+  .hour-row { display:flex; align-items:center; gap:10px; }
+  .hour-lbl { font-size:0.7rem; color:var(--muted); width:36px; text-align:right; }
+  .hour-bar-wrap { flex:1; height:18px; background:var(--surface2); border-radius:6px; overflow:hidden; }
+  .hour-bar { height:100%; background:linear-gradient(90deg, var(--accent2), var(--accent)); border-radius:6px; transition:width 0.5s ease; min-width:0; }
+  .hour-ml { font-size:0.68rem; color:var(--muted); width:36px; }
+
+  /* ── SCROLL TABS SECTION ── */
+  .section { display:none; }
+  .section.active { display:block; }
+
+  /* Reset day button */
+  .reset-row { display:flex; justify-content:flex-end; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<div class="bg-orbs">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+</div>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <svg class="logo-icon" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="lgA" cx="42%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#7dd3fc"/>
+            <stop offset="40%" stop-color="#38bdf8"/>
+            <stop offset="75%" stop-color="#0ea5e9"/>
+            <stop offset="100%" stop-color="#1e40af"/>
+          </radialGradient>
+          <radialGradient id="lgB" cx="35%" cy="28%" r="42%">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.92"/>
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="lgC" cx="50%" cy="85%" r="50%">
+            <stop offset="0%" stop-color="#1e3a8a" stop-opacity="0.6"/>
+            <stop offset="100%" stop-color="#1e3a8a" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <!-- Drop body -->
+        <path d="M50 6C50 6 14 42 12 66c-2 22 15 44 38 44s40-22 38-44C86 42 50 6 50 6z" fill="url(#lgA)"/>
+        <!-- Dark base depth -->
+        <path d="M50 6C50 6 14 42 12 66c-2 22 15 44 38 44s40-22 38-44C86 42 50 6 50 6z" fill="url(#lgC)"/>
+        <!-- Gloss shimmer -->
+        <path d="M50 6C50 6 14 42 12 66c-2 22 15 44 38 44s40-22 38-44C86 42 50 6 50 6z" fill="url(#lgB)"/>
+        <!-- Primary specular -->
+        <ellipse cx="34" cy="42" rx="9" ry="15" fill="white" opacity="0.82" transform="rotate(-20 34 42)"/>
+        <!-- Tiny sharp dot -->
+        <ellipse cx="28" cy="30" rx="3.5" ry="5.5" fill="white" opacity="0.9" transform="rotate(-20 28 30)"/>
+        <!-- Edge rim light -->
+        <path d="M22 52 C18 68 19 85 28 100" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.2"/>
+        <!-- Bottom refraction -->
+        <path d="M28 96 Q50 106 72 96" fill="none" stroke="#bfdbfe" stroke-width="1.5" stroke-linecap="round" opacity="0.35"/>
+        <!-- Outline -->
+        <path d="M50 6C50 6 14 42 12 66c-2 22 15 44 38 44s40-22 38-44C86 42 50 6 50 6z" fill="none" stroke="#93c5fd" stroke-width="1" opacity="0.4"/>
+      </svg>
+      Hydra<span>te</span>
+    </div>
+    <div class="streak-badge">🔥 <span id="streakCount">0</span> day streak</div>
+  </header>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('today')">Today</div>
+    <div class="tab" onclick="switchTab('history')">History</div>
+    <div class="tab" onclick="switchTab('stats')">Stats</div>
+    <div class="tab" onclick="switchTab('settings')">Settings</div>
+  </div>
+
+  <!-- ── TODAY ── -->
+  <div class="section active" id="tab-today">
+
+    <!-- PROGRESS -->
+    <div class="card goal-section">
+      <div class="goal-label">Daily Progress</div>
+      <div class="wave-wrap">
+        <div class="wave-svg-wrap">
+          <svg viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <clipPath id="circleClip">
+                <circle cx="90" cy="90" r="84"/>
+              </clipPath>
+              <radialGradient id="waterGrad" cx="50%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="#7dd3fc"/>
+                <stop offset="50%" stop-color="#38bdf8"/>
+                <stop offset="100%" stop-color="#1d4ed8"/>
+              </radialGradient>
+              <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#1a2235"/>
+                <stop offset="100%" stop-color="#0d1626"/>
+              </radialGradient>
+              <filter id="blur1">
+                <feGaussianBlur stdDeviation="1.5"/>
+              </filter>
+            </defs>
+
+            <!-- Outer ring glow -->
+            <circle cx="90" cy="90" r="87" fill="none" stroke="rgba(56,189,248,0.25)" stroke-width="1.5"/>
+            <!-- Background -->
+            <circle cx="90" cy="90" r="84" fill="url(#bgGrad)"/>
+
+            <!-- Water body clipped to circle -->
+            <g clip-path="url(#circleClip)">
+              <!-- Static water fill -->
+              <rect id="waterBg" x="0" y="180" width="180" height="180" fill="url(#waterGrad)"/>
+
+              <!-- Back wave (slower, subtle) -->
+              <path id="waveBack" fill="rgba(56,189,248,0.35)" d=""/>
+              <!-- Front wave (main sloshing) -->
+              <path id="waveFront" fill="url(#waterGrad)" d=""/>
+
+              <!-- Shimmer/highlight on water surface -->
+              <ellipse id="shimmer" cx="75" cy="90" rx="18" ry="4" fill="rgba(255,255,255,0.18)" filter="url(#blur1)"/>
+            </g>
+
+            <!-- Glass rim highlight -->
+            <circle cx="90" cy="90" r="84" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="3"/>
+            <circle cx="90" cy="90" r="84" fill="none" stroke="rgba(56,189,248,0.4)" stroke-width="2"/>
+          </svg>
+          <div class="wave-center">
+            <div class="wave-ml" id="totalMl">0</div>
+            <div class="wave-unit">ml today</div>
+          </div>
+        </div>
+      </div>
+      <div class="goal-stats">
+        <div class="goal-stat">
+          <div class="goal-stat-val" id="goalDisplay">2000</div>
+          <div class="goal-stat-lbl">Goal (ml)</div>
+        </div>
+        <div class="goal-stat">
+          <div class="goal-stat-val" id="remainDisplay">2000</div>
+          <div class="goal-stat-lbl">Remaining</div>
+        </div>
+        <div class="goal-stat">
+          <div class="goal-stat-val" id="glassCount">0</div>
+          <div class="goal-stat-lbl">Entries</div>
+        </div>
+      </div>
+      <div class="pct-bar-wrap">
+        <div class="pct-bar"><div class="pct-bar-fill" id="pctFill" style="width:0%"></div></div>
+        <div class="pct-text" id="pctText">0% of daily goal</div>
+      </div>
+    </div>
+
+    <!-- QUICK ADD -->
+    <div class="card">
+      <div class="section-title">Quick Add</div>
+      <div class="quick-btns" id="quickBtns"></div>
+    </div>
+
+    <!-- TODAY LOG -->
+    <div class="card">
+      <div class="section-title">Today's Log</div>
+      <div class="history-list" id="todayLog"></div>
+    </div>
+
+  </div>
+
+  <!-- ── HISTORY ── -->
+  <div class="section" id="tab-history">
+    <div class="card">
+      <div class="section-title">Past 7 Days</div>
+      <div id="historyWeek"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Hourly Breakdown — Today</div>
+      <div class="hour-timeline" id="hourTimeline"></div>
+    </div>
+  </div>
+
+  <!-- ── STATS ── -->
+  <div class="section" id="tab-stats">
+    <div class="card">
+      <div class="section-title">All-Time Stats</div>
+      <div class="stats-grid" id="statsGrid"></div>
+    </div>
+    <div class="card" id="motivationCard">
+      <div class="section-title">Today's Motivation</div>
+      <p id="motivationText" style="font-size:0.9rem;line-height:1.6;color:var(--muted)"></p>
+    </div>
+  </div>
+
+  <!-- ── SETTINGS ── -->
+  <div class="section" id="tab-settings">
+
+    <!-- DAILY GOAL -->
+    <div class="card">
+      <div class="section-title">Daily Goal</div>
+      <div class="input-row">
+        <input class="input-field" type="number" id="goalInput" placeholder="e.g. 2000" min="100" max="9999">
+        <button class="btn-primary" onclick="saveGoal()">Save</button>
+      </div>
+      <p style="font-size:0.75rem;color:var(--muted);margin-top:8px;">Recommended: 2000–3000 ml/day</p>
+    </div>
+
+    <!-- CUSTOM SIZES -->
+    <div class="card">
+      <div class="section-title">Manage Sizes</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:12px;">Add your own cup/bottle sizes. Long-press any button to delete.</p>
+      <div class="input-row">
+        <input class="input-field" type="number" id="customMlInput" placeholder="Amount in ml" min="1" max="9999">
+        <input class="input-field" type="text" id="customLabelInput" placeholder="Label (optional)" maxlength="12" style="max-width:130px">
+        <button class="btn-primary" onclick="addCustomSize()">Add</button>
+      </div>
+    </div>
+
+    <!-- REMINDER -->
+    <div class="card">
+      <div class="section-title">Smart Reminders</div>
+      <div class="reminder-row">
+        <div class="reminder-info">
+          <h3>Drink Water Alerts</h3>
+          <p id="reminderStatusText">Off — tap to enable</p>
+        </div>
+        <div class="toggle-wrap">
+          <div class="toggle" id="reminderToggle" onclick="toggleReminder()"></div>
+        </div>
+      </div>
+      <div class="notif-badge" id="notifBadge" style="display:none">⚠️ Enable browser notifications for alerts</div>
+      <div class="interval-row" id="intervalRow" style="display:none">
+        <div class="interval-btn" data-min="15" onclick="setInterval_(15)">15 min</div>
+        <div class="interval-btn" data-min="30" onclick="setInterval_(30)">30 min</div>
+        <div class="interval-btn active" data-min="60" onclick="setInterval_(60)">1 hr</div>
+        <div class="interval-btn" data-min="90" onclick="setInterval_(90)">1.5 hr</div>
+        <div class="interval-btn" data-min="120" onclick="setInterval_(120)">2 hr</div>
+      </div>
+    </div>
+
+    <!-- QUIET HOURS -->
+    <div class="card" id="quietCard" style="display:none">
+      <div class="section-title">Quiet Hours</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;">No reminders during sleep time</p>
+      <div class="input-row">
+        <input class="input-field" type="time" id="quietStart" value="22:00">
+        <span style="align-self:center;color:var(--muted);font-size:0.8rem">to</span>
+        <input class="input-field" type="time" id="quietEnd" value="07:00">
+        <button class="btn-primary" onclick="saveQuiet()">Save</button>
+      </div>
+    </div>
+
+    <!-- RESET -->
+    <div class="card">
+      <div class="section-title">Data</div>
+      <div class="input-row" style="flex-wrap:wrap;gap:8px">
+        <button class="btn-danger" onclick="resetToday()">Reset Today</button>
+        <button class="btn-danger" onclick="resetAll()">Clear All Data</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────
+const DEFAULT_SIZES = [
+  {ml:50,  label:'Shot'},
+  {ml:100, label:'Small'},
+  {ml:200, label:'Cup'},
+  {ml:250, label:'Glass'},
+  {ml:350, label:'Bottle'},
+  {ml:500, label:'Large'},
+];
+
+function loadState() {
+  return JSON.parse(localStorage.getItem('hydrate_state') || 'null') || {
+    goal: 2000,
+    sizes: DEFAULT_SIZES,
+    log: [],        // [{ml, time(ISO), date(YYYY-MM-DD)}]
+    reminder: false,
+    intervalMin: 60,
+    quietStart: '22:00',
+    quietEnd: '07:00',
+    streak: 0,
+    lastStreakDate: null,
+  };
+}
+
+let state = loadState();
+let reminderTimer = null;
+
+function save() {
+  localStorage.setItem('hydrate_state', JSON.stringify(state));
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0,10);
+}
+
+function todayLog() {
+  return state.log.filter(e => e.date === todayStr());
+}
+
+function todayTotal() {
+  return todayLog().reduce((s,e) => s+e.ml, 0);
+}
+
+// ─── STREAK ──────────────────────────────────────────────────
+function updateStreak() {
+  const today = todayStr();
+  const yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
+  const total = todayTotal();
+  if (total >= state.goal) {
+    if (state.lastStreakDate === yesterday) state.streak++;
+    else if (state.lastStreakDate !== today) state.streak = 1;
+    state.lastStreakDate = today;
+  }
+  save();
+}
+
+// ─── RENDER ──────────────────────────────────────────────────
+function render() {
+  updateStreak();
+  const total = todayTotal();
+  const pct = Math.min(100, Math.round((total/state.goal)*100));
+  const remain = Math.max(0, state.goal - total);
+
+  document.getElementById('streakCount').textContent = state.streak;
+  document.getElementById('totalMl').textContent = total;
+  document.getElementById('goalDisplay').textContent = state.goal;
+  document.getElementById('remainDisplay').textContent = remain;
+  document.getElementById('glassCount').textContent = todayLog().length;
+  updateWaterLevel(pct);
+  document.getElementById('pctFill').style.width = pct+'%';
+  document.getElementById('pctText').textContent = pct+'% of daily goal';
+  document.getElementById('goalInput').placeholder = state.goal;
+
+  renderQuickBtns();
+  renderTodayLog();
+  renderHistory();
+  renderStats();
+  renderHourTimeline();
+  renderReminderUI();
+  renderMotivation();
+}
+
+function renderQuickBtns() {
+  const wrap = document.getElementById('quickBtns');
+  wrap.innerHTML = '';
+  state.sizes.forEach((s, i) => {
+    const btn = document.createElement('div');
+    btn.className = 'quick-btn';
+    btn.innerHTML = `
+      <span class="del-x" title="Delete" onclick="deleteSize(event,${i})">✕</span>
+      <div class="btn-ml">${s.ml}ml</div>
+      <div class="btn-label">${s.label}</div>
+    `;
+    btn.addEventListener('click', () => logWater(s.ml));
+    // Long press = delete mode
+    let pressTimer;
+    btn.addEventListener('touchstart', () => { pressTimer = setTimeout(() => btn.classList.toggle('delete-mode'), 600); });
+    btn.addEventListener('touchend', () => clearTimeout(pressTimer));
+    btn.addEventListener('mousedown', () => { pressTimer = setTimeout(() => btn.classList.toggle('delete-mode'), 600); });
+    btn.addEventListener('mouseup', () => clearTimeout(pressTimer));
+    wrap.appendChild(btn);
+  });
+  // + add button
+  const addBtn = document.createElement('div');
+  addBtn.className = 'quick-btn custom-add-btn';
+  addBtn.innerHTML = `<div class="btn-ml" style="font-size:1.6rem">+</div><div class="btn-label">Custom</div>`;
+  addBtn.onclick = () => switchTab('settings');
+  wrap.appendChild(addBtn);
+}
+
+function renderTodayLog() {
+  const list = document.getElementById('todayLog');
+  const log = todayLog().slice().reverse();
+  if (!log.length) {
+    list.innerHTML = '<div class="empty-history">No entries yet — start drinking! 💧</div>';
+    return;
+  }
+  list.innerHTML = log.map((e,i) => {
+    const t = new Date(e.time);
+    const time = t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const realIdx = todayLog().length - 1 - i;
+    return `<div class="history-item">
+      <span class="h-time">${time}</span>
+      <span class="h-ml">+${e.ml} ml</span>
+      <button class="h-del" onclick="deleteEntry('${e.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderHistory() {
+  const wrap = document.getElementById('historyWeek');
+  const days = [];
+  for(let i=6;i>=0;i--) {
+    const d = new Date(Date.now()-i*86400000);
+    const ds = d.toISOString().slice(0,10);
+    const total = state.log.filter(e=>e.date===ds).reduce((s,e)=>s+e.ml,0);
+    const label = i===0?'Today':i===1?'Yesterday':d.toLocaleDateString([],{weekday:'short'});
+    const pct = Math.min(100,Math.round((total/state.goal)*100));
+    const color = pct>=100?'var(--success)':pct>=60?'var(--accent)':pct>=30?'var(--warn)':'var(--danger)';
+    days.push(`<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--muted);margin-bottom:4px">
+        <span>${label}</span><span style="color:${color}">${total}ml / ${state.goal}ml</span>
+      </div>
+      <div class="pct-bar"><div class="pct-bar-fill" style="width:${pct}%;background:${color};box-shadow:none"></div></div>
+    </div>`);
+  }
+  wrap.innerHTML = days.join('');
+}
+
+function renderHourTimeline() {
+  const wrap = document.getElementById('hourTimeline');
+  const log = todayLog();
+  const hours = {};
+  log.forEach(e => {
+    const h = new Date(e.time).getHours();
+    hours[h] = (hours[h]||0)+e.ml;
+  });
+  const max = Math.max(...Object.values(hours),1);
+  const now = new Date().getHours();
+  let html = '';
+  for(let h=6;h<=23;h++) {
+    const ml = hours[h]||0;
+    const pct = Math.round((ml/max)*100);
+    const isNow = h===now;
+    html += `<div class="hour-row" style="${isNow?'opacity:1':'opacity:0.6'}">
+      <div class="hour-lbl">${h}:00</div>
+      <div class="hour-bar-wrap"><div class="hour-bar" style="width:${pct}%"></div></div>
+      <div class="hour-ml">${ml?ml+'ml':''}</div>
+    </div>`;
+  }
+  wrap.innerHTML = html || '<div class="empty-history">No data</div>';
+}
+
+function renderStats() {
+  const allDates = [...new Set(state.log.map(e=>e.date))];
+  const totalAll = state.log.reduce((s,e)=>s+e.ml,0);
+  const avgPerDay = allDates.length ? Math.round(totalAll/allDates.length) : 0;
+  const goalDays = allDates.filter(d=>{
+    const tot = state.log.filter(e=>e.date===d).reduce((s,e)=>s+e.ml,0);
+    return tot >= state.goal;
+  }).length;
+  const best = allDates.reduce((bst,d)=>{
+    const tot = state.log.filter(e=>e.date===d).reduce((s,e)=>s+e.ml,0);
+    return tot>bst?tot:bst;
+  },0);
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-box"><div class="sv blue">${(totalAll/1000).toFixed(1)}L</div><div class="sl">Total Consumed</div></div>
+    <div class="stat-box"><div class="sv green">${avgPerDay}ml</div><div class="sl">Daily Average</div></div>
+    <div class="stat-box"><div class="sv warn">${goalDays}</div><div class="sl">Goals Achieved</div></div>
+    <div class="stat-box"><div class="sv blue">${best}ml</div><div class="sl">Best Day</div></div>
+  `;
+}
+
+const MOTIVATIONS = [
+  "Water makes up ~60% of your body. Every sip is an investment in YOU. 💙",
+  "Staying hydrated improves focus, energy, and mood. Keep it up!",
+  "Even mild dehydration can reduce cognitive performance by 10%. Drink up!",
+  "Your kidneys need ~2L/day to filter waste effectively. You're doing great.",
+  "Hydration helps regulate your blood glucose. Great choice, Hunny! 🌿",
+  "Muscle cramps? Often just dehydration. Water is the original energy drink.",
+  "Skin, joints, and digestion all depend on water. One sip at a time. ✨",
+];
+
+function renderMotivation() {
+  const idx = new Date().getDate() % MOTIVATIONS.length;
+  document.getElementById('motivationText').textContent = MOTIVATIONS[idx];
+}
+
+function renderReminderUI() {
+  const on = state.reminder;
+  const toggle = document.getElementById('reminderToggle');
+  const intervalRow = document.getElementById('intervalRow');
+  const quietCard = document.getElementById('quietCard');
+  const statusText = document.getElementById('reminderStatusText');
+  toggle.classList.toggle('on', on);
+  intervalRow.style.display = on ? 'flex' : 'none';
+  quietCard.style.display = on ? 'block' : 'none';
+  statusText.textContent = on ? `Reminding every ${state.intervalMin} min` : 'Off — tap to enable';
+  document.querySelectorAll('.interval-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.min) === state.intervalMin);
+  });
+  document.getElementById('quietStart').value = state.quietStart;
+  document.getElementById('quietEnd').value = state.quietEnd;
+}
+
+// ─── ACTIONS ─────────────────────────────────────────────────
+function logWater(ml) {
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  state.log.push({ id, ml, time: new Date().toISOString(), date: todayStr() });
+  save(); render();
+  waveSloshAmp = 18; waveSloshDecay = 0.92; // extra splash on add
+  showToast(`💧 +${ml}ml logged!`, 'success');
+  createRipple(event);
+}
+
+function deleteEntry(id) {
+  state.log = state.log.filter(e => e.id !== id);
+  save(); render();
+  showToast('Entry removed', '');
+}
+
+function deleteSize(event, index) {
+  event.stopPropagation();
+  state.sizes.splice(index,1);
+  save(); render();
+  showToast('Size removed', '');
+}
+
+function addCustomSize() {
+  const ml = parseInt(document.getElementById('customMlInput').value);
+  const label = document.getElementById('customLabelInput').value.trim() || ml+'ml';
+  if (!ml || ml<1 || ml>9999) { showToast('Enter a valid amount (1–9999 ml)', 'warn'); return; }
+  if (state.sizes.length >= 12) { showToast('Max 12 sizes', 'warn'); return; }
+  state.sizes.push({ml, label});
+  document.getElementById('customMlInput').value = '';
+  document.getElementById('customLabelInput').value = '';
+  save(); render(); switchTab('today');
+  showToast(`✅ ${ml}ml "${label}" added!`, 'success');
+}
+
+function saveGoal() {
+  const g = parseInt(document.getElementById('goalInput').value);
+  if (!g || g<100 || g>9999) { showToast('Enter a goal between 100–9999 ml', 'warn'); return; }
+  state.goal = g;
+  save(); render();
+  showToast(`🎯 Goal set to ${g}ml`, 'success');
+}
+
+function resetToday() {
+  if (!confirm('Reset today\'s entries?')) return;
+  state.log = state.log.filter(e => e.date !== todayStr());
+  save(); render();
+  showToast('Today reset', 'warn');
+}
+
+function resetAll() {
+  if (!confirm('Clear ALL data? This cannot be undone.')) return;
+  state.log = [];
+  state.streak = 0;
+  state.lastStreakDate = null;
+  save(); render();
+  showToast('All data cleared', 'warn');
+}
+
+// ─── REMINDER ────────────────────────────────────────────────
+function toggleReminder() {
+  if (!state.reminder) {
+    // Request notification permission
+    if ('Notification' in window) {
+      Notification.requestPermission().then(perm => {
+        if (perm === 'denied') {
+          document.getElementById('notifBadge').style.display = 'flex';
+        } else {
+          document.getElementById('notifBadge').style.display = 'none';
+        }
+      });
+    }
+    state.reminder = true;
+    startReminder();
+  } else {
+    state.reminder = false;
+    stopReminder();
+  }
+  save(); renderReminderUI();
+}
+
+function setInterval_(min) {
+  state.intervalMin = min;
+  save();
+  if (state.reminder) { stopReminder(); startReminder(); }
+  renderReminderUI();
+}
+
+function saveQuiet() {
+  state.quietStart = document.getElementById('quietStart').value;
+  state.quietEnd = document.getElementById('quietEnd').value;
+  save();
+  showToast('Quiet hours saved 🌙', 'success');
+}
+
+function isQuietTime() {
+  const now = new Date();
+  const hh = now.getHours();
+  const mm = now.getMinutes();
+  const cur = hh*60+mm;
+  const [sh,sm] = state.quietStart.split(':').map(Number);
+  const [eh,em] = state.quietEnd.split(':').map(Number);
+  const start = sh*60+sm, end = eh*60+em;
+  if (start > end) return cur >= start || cur <= end;
+  return cur >= start && cur <= end;
+}
+
+function startReminder() {
+  stopReminder();
+  reminderTimer = setInterval(() => {
+    if (isQuietTime()) return;
+    sendReminder();
+  }, state.intervalMin * 60 * 1000);
+}
+
+function stopReminder() {
+  if (reminderTimer) { clearInterval(reminderTimer); reminderTimer = null; }
+}
+
+function sendReminder() {
+  const remain = Math.max(0, state.goal - todayTotal());
+  const msg = remain > 0
+    ? `💧 Time to drink water! ${remain}ml remaining for your daily goal.`
+    : `🎉 Great job! You've hit your daily goal. Keep sipping!`;
+  
+  // In-app toast
+  showToast('💧 Time to drink water!', 'warn');
+
+  // Browser notification
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('Hydrate — Drink Water! 💧', {
+      body: msg,
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">💧</text></svg>',
+      tag: 'hydrate-reminder',
+    });
+  }
+}
+
+// ─── AUTO MIDNIGHT RESET CHECK ───────────────────────────────
+function checkMidnight() {
+  // streak is already handled in updateStreak, nothing else to reset automatically
+  // just keep local re-render fresh every minute
+}
+setInterval(() => { render(); checkMidnight(); }, 60000);
+
+// ─── UI HELPERS ──────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  const tabs = ['today','history','stats','settings'];
+  document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
+}
+
+let toastTimer;
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type==='warn'?'warn':type==='success'?'success':'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function createRipple(e) {
+  if (!e || !e.currentTarget) return;
+  const btn = e.currentTarget;
+  const circle = document.createElement('span');
+  const diameter = Math.max(btn.clientWidth, btn.clientHeight);
+  const rect = btn.getBoundingClientRect();
+  circle.style.width = circle.style.height = diameter+'px';
+  circle.style.left = (e.clientX - rect.left - diameter/2) + 'px';
+  circle.style.top  = (e.clientY - rect.top  - diameter/2) + 'px';
+  circle.classList.add('ripple');
+  btn.appendChild(circle);
+  setTimeout(() => circle.remove(), 700);
+}
+
+// ─── SVG WAVE ENGINE ─────────────────────────────────────────
+let waveTargetPct = 0;
+let waveCurPct    = 0;
+let wavePhase1    = 0;  // front wave phase
+let wavePhase2    = Math.PI; // back wave phase
+let waveSloshAmp  = 0;  // extra tilt amplitude (surges on log)
+let waveSloshDecay = 0;
+
+const SIZE = 180, CX = 90, CY = 90, R = 84;
+
+function setWaterPct(pct) {
+  waveTargetPct = Math.min(100, Math.max(0, pct));
+  // Trigger slosh burst
+  waveSloshAmp = 14;
+  waveSloshDecay = 0.94;
+}
+
+function updateWaterLevel(pct) {
+  setWaterPct(pct);
+}
+
+function buildWavePath(baseY, amp, phase, tilt) {
+  // Generate a sine wave across the circle width, clipped later by SVG clipPath
+  const steps = 60;
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const x = (i / steps) * SIZE;
+    const sine = Math.sin((i / steps) * Math.PI * 2.5 + phase);
+    const y = baseY + sine * amp + (tilt * (x - CX) / R);
+    pts.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`);
+  }
+  // Close path downward to fill below wave
+  pts.push(`L${SIZE},${SIZE} L0,${SIZE} Z`);
+  return pts.join(' ');
+}
+
+function waveLoop() {
+  // Ease current level toward target
+  waveCurPct += (waveTargetPct - waveCurPct) * 0.04;
+
+  // Decay slosh
+  waveSloshAmp *= waveSloshDecay;
+  if (waveSloshAmp < 0.05) waveSloshAmp = 0;
+
+  // Advance phases
+  wavePhase1 += 0.032;
+  wavePhase2 += 0.019;
+
+  // baseY: 0% = bottom (y=174), 100% = top (y=6)
+  const baseY = 174 - (waveCurPct / 100) * 168;
+
+  const frontAmp = 5 + waveSloshAmp;
+  const backAmp  = 3 + waveSloshAmp * 0.5;
+  const tilt = waveSloshAmp * 0.6 * Math.sin(wavePhase1 * 0.3);
+
+  document.getElementById('waveFront').setAttribute('d', buildWavePath(baseY, frontAmp, wavePhase1, tilt));
+  document.getElementById('waveBack').setAttribute('d',  buildWavePath(baseY + 6, backAmp, wavePhase2, -tilt * 0.5));
+  document.getElementById('waterBg').setAttribute('y', baseY + 10);
+
+  // Shimmer floats just below surface
+  const shimmerY = baseY + 5;
+  document.getElementById('shimmer').setAttribute('cy', shimmerY);
+  document.getElementById('shimmer').setAttribute('cx', 70 + Math.sin(wavePhase1 * 0.4) * 8);
+
+  requestAnimationFrame(waveLoop);
+}
+requestAnimationFrame(waveLoop);
+
+// ─── INIT ─────────────────────────────────────────────────────
+if (state.reminder) startReminder();
+render();
+
+// Service worker hint for PWA (optional future use)
+if ('serviceWorker' in navigator) {
+  // register('/sw.js') — can be added later
+}
+</script>
+</body>
+</html>
