@@ -2,8 +2,68 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Anuj Expenses</title>
+
+<!-- PWA META TAGS -->
+<meta name="application-name" content="Anuj Expenses">
+<meta name="description" content="Personal expense tracker by Anuj">
+<meta name="theme-color" content="#0f0f13">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Anuj Expenses">
+<meta name="msapplication-TileColor" content="#7c6af7">
+<meta name="msapplication-tap-highlight" content="no">
+
+<!-- INLINE MANIFEST via JS (single file, no separate manifest.json needed) -->
+<script>
+(function(){
+  // Generate icon as SVG → data URI
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+    <rect width="512" height="512" rx="112" fill="#0f0f13"/>
+    <rect width="512" height="512" rx="112" fill="url(#g)"/>
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#7c6af7"/>
+        <stop offset="100%" stop-color="#a396ff" stop-opacity="0.7"/>
+      </linearGradient>
+    </defs>
+    <text x="256" y="200" text-anchor="middle" font-family="Arial Black,sans-serif" font-weight="900" font-size="180" fill="white">A</text>
+    <text x="256" y="370" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="90" fill="rgba(255,255,255,0.75)">₹$</text>
+  </svg>`;
+  const iconUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+
+  // Inject apple touch icon
+  const appleLink = document.createElement('link');
+  appleLink.rel = 'apple-touch-icon';
+  appleLink.href = iconUrl;
+  document.head.appendChild(appleLink);
+
+  // Inject manifest dynamically (works for single HTML file)
+  const manifest = {
+    name: 'Anuj Expenses',
+    short_name: 'Anuj Expenses',
+    description: 'Personal expense tracker',
+    start_url: './',
+    display: 'standalone',
+    orientation: 'any',
+    background_color: '#0f0f13',
+    theme_color: '#7c6af7',
+    categories: ['finance', 'productivity'],
+    icons: [
+      { src: iconUrl, sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
+      { src: iconUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+  const manifestUrl = URL.createObjectURL(blob);
+  const link = document.createElement('link');
+  link.rel = 'manifest';
+  link.href = manifestUrl;
+  document.head.appendChild(link);
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -241,6 +301,18 @@ main{display:grid;grid-template-columns:340px 1fr;flex:1;min-height:0;}
   .right-header{padding:1rem 1.2rem;}
   .pending-banner{padding:10px 1.2rem;}
   .filter-row{padding:8px 1.2rem;}
+}
+
+/* FOLD 7 / NOTCH SAFE AREAS */
+@supports(padding-top: env(safe-area-inset-top)){
+  header{padding-top: calc(1.2rem + env(safe-area-inset-top));}
+  body{padding-bottom: env(safe-area-inset-bottom);}
+}
+
+/* STANDALONE MODE — hide address bar space */
+@media(display-mode: standalone){
+  header{padding-top: calc(1.2rem + env(safe-area-inset-top, 0px));}
+  .toast{bottom: calc(2rem + env(safe-area-inset-bottom, 0px));}
 }
 </style>
 </head>
@@ -1210,6 +1282,30 @@ function init() {
 }
 
 init();
+
+// SERVICE WORKER — enables offline use
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    const CACHE = 'anuj-expenses-v1';
+    const FONT_URL = 'https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap';
+    self.addEventListener('install', e => {
+      e.waitUntil(
+        caches.open(CACHE).then(c => c.addAll([FONT_URL]).catch(() => {}))
+      );
+      self.skipWaiting();
+    });
+    self.addEventListener('activate', e => {
+      e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))));
+      self.clients.claim();
+    });
+    self.addEventListener('fetch', e => {
+      e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).catch(() => new Response('Offline'))));
+    });
+  `;
+  const swBlob = new Blob([swCode], {type: 'application/javascript'});
+  const swUrl = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl).catch(() => {});
+}
 </script>
 </body>
 </html>
