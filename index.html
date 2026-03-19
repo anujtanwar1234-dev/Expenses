@@ -21,16 +21,42 @@
 (function(){
   // Generate icon as SVG → data URI
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-    <rect width="512" height="512" rx="112" fill="#0f0f13"/>
-    <rect width="512" height="512" rx="112" fill="url(#g)"/>
     <defs>
-      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#7c6af7"/>
-        <stop offset="100%" stop-color="#a396ff" stop-opacity="0.7"/>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#1a1530"/>
+        <stop offset="100%" stop-color="#0d0b1a"/>
+      </linearGradient>
+      <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#9d8fff"/>
+        <stop offset="100%" stop-color="#6a5fd4"/>
       </linearGradient>
     </defs>
-    <text x="256" y="200" text-anchor="middle" font-family="Arial Black,sans-serif" font-weight="900" font-size="180" fill="white">A</text>
-    <text x="256" y="370" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="90" fill="rgba(255,255,255,0.75)">₹$</text>
+    <!-- background -->
+    <rect width="512" height="512" rx="110" fill="url(#bg)"/>
+    <!-- wallet body -->
+    <rect x="96" y="180" width="320" height="200" rx="28" fill="url(#wg)"/>
+    <!-- wallet top flap -->
+    <rect x="96" y="180" width="320" height="72" rx="28" fill="#8578f0"/>
+    <!-- flap bottom straight edge -->
+    <rect x="96" y="224" width="320" height="28" fill="#8578f0"/>
+    <!-- card peek inside -->
+    <rect x="126" y="222" width="180" height="90" rx="14" fill="#6a5fd4" opacity="0.5"/>
+    <rect x="126" y="222" width="180" height="32" rx="14" fill="#5a50c4" opacity="0.6"/>
+    <!-- card dots (chip) -->
+    <rect x="142" y="232" width="28" height="20" rx="5" fill="#f5c842" opacity="0.85"/>
+    <!-- coin pocket on right -->
+    <rect x="330" y="236" width="72" height="62" rx="20" fill="#5a50c4"/>
+    <circle cx="366" cy="267" r="18" fill="#f5c842" opacity="0.9"/>
+    <circle cx="366" cy="267" r="12" fill="#e8b020"/>
+    <!-- dollar sign on coin -->
+    <line x1="366" y1="258" x2="366" y2="276" stroke="#7a4a00" stroke-width="3" stroke-linecap="round"/>
+    <path d="M360 261 Q366 258 372 261" fill="none" stroke="#7a4a00" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M360 273 Q366 276 372 273" fill="none" stroke="#7a4a00" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- card lines on main body -->
+    <rect x="126" y="318" width="120" height="10" rx="5" fill="white" opacity="0.15"/>
+    <rect x="126" y="336" width="80" height="10" rx="5" fill="white" opacity="0.1"/>
+    <!-- subtle shine on top -->
+    <rect x="96" y="180" width="320" height="2" rx="1" fill="white" opacity="0.2"/>
   </svg>`;
   const iconUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
 
