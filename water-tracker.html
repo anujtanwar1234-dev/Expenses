@@ -326,13 +326,26 @@ header { display:flex; align-items:center; justify-content:space-between; paddin
         <div class="toggle" id="reminderToggle" onclick="toggleReminder()"></div>
       </div>
       <div class="notif-warn" id="notifBadge">⚠️ Allow notifications in your browser settings</div>
-      <div class="interval-grid" id="intervalRow" style="display:none">
-        <div class="ibtn" data-min="2" onclick="setInterval_(2)">2m</div>
-        <div class="ibtn" data-min="15" onclick="setInterval_(15)">15m</div>
-        <div class="ibtn" data-min="30" onclick="setInterval_(30)">30m</div>
-        <div class="ibtn active" data-min="60" onclick="setInterval_(60)">1hr</div>
-        <div class="ibtn" data-min="90" onclick="setInterval_(90)">1.5h</div>
-        <div class="ibtn" data-min="120" onclick="setInterval_(120)">2hr</div>
+      <div id="intervalRow" style="display:none;margin-top:10px;">
+        <div style="font-size:0.7rem;color:var(--muted);font-weight:600;margin-bottom:7px;">Remind me every:</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="customIntervalVal" class="inp" type="number" min="1" max="9999" placeholder="30" style="width:80px;flex-shrink:0;text-align:center;font-family:var(--fh);font-weight:800;font-size:1rem;">
+          <select id="customIntervalUnit" class="inp" style="flex:1;cursor:pointer;">
+            <option value="sec">Seconds</option>
+            <option value="min" selected>Minutes</option>
+            <option value="hr">Hours</option>
+          </select>
+          <button class="btn-p" onclick="applyCustomInterval()" style="flex-shrink:0;">Set</button>
+        </div>
+        <div id="intervalDisplay" style="margin-top:7px;font-size:0.72rem;color:var(--accent);font-weight:700;text-align:center;"></div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+          <div class="ibtn" onclick="quickSet(10,'sec')">10s</div>
+          <div class="ibtn" onclick="quickSet(30,'sec')">30s</div>
+          <div class="ibtn" onclick="quickSet(15,'min')">15m</div>
+          <div class="ibtn" onclick="quickSet(30,'min')">30m</div>
+          <div class="ibtn" onclick="quickSet(1,'hr')">1hr</div>
+          <div class="ibtn" onclick="quickSet(2,'hr')">2hr</div>
+        </div>
       </div>
       <div id="notifHelpCard" style="display:none;margin-top:10px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.35);border-radius:12px;padding:12px;font-size:0.74rem;color:var(--warn);line-height:1.65;">
         <strong>📲 To enable phone notifications:</strong><br>
@@ -483,11 +496,21 @@ function renderMotivation(){document.getElementById('motivationText').textConten
 
 function renderReminderUI(){
   const on=state.reminder;
+  const ms=state.intervalMs||(state.intervalMin*60*1000)||60000;
   document.getElementById('reminderToggle').classList.toggle('on',on);
-  document.getElementById('intervalRow').style.display=on?'flex':'none';
+  document.getElementById('intervalRow').style.display=on?'block':'none';
   document.getElementById('quietCard').style.display=on?'block':'none';
-  document.getElementById('reminderStatusText').textContent=on?'Reminding every '+state.intervalMin+' min':'Off — tap to enable';
-  document.querySelectorAll('.ibtn').forEach(b=>b.classList.toggle('active',parseInt(b.dataset.min)===state.intervalMin));
+  const friendly=friendlyInterval(ms);
+  document.getElementById('reminderStatusText').textContent=on?'Reminding every '+friendly:'Off — tap to enable';
+  const disp=document.getElementById('intervalDisplay');
+  if(disp) disp.textContent=on&&friendly?'Currently: every '+friendly:'';
+  const valEl=document.getElementById('customIntervalVal');
+  const unitEl=document.getElementById('customIntervalUnit');
+  if(valEl&&unitEl&&ms){
+    if(ms%3600000===0&&ms>=3600000){valEl.value=ms/3600000;unitEl.value='hr';}
+    else if(ms%60000===0){valEl.value=ms/60000;unitEl.value='min';}
+    else{valEl.value=Math.round(ms/1000);unitEl.value='sec';}
+  }
   document.getElementById('quietStart').value=state.quietStart;
   document.getElementById('quietEnd').value=state.quietEnd;
 }
@@ -526,57 +549,117 @@ function resetAll(){
   else{el.textContent='Tap again to confirm';el.dataset.confirm='1';setTimeout(()=>{el.textContent='Clear All Data';el.dataset.confirm='0';},3000);}
 }
 
-// ── REMINDER SYSTEM (Android PWA compatible) ──
-// Uses Service Worker postMessage for real phone notifications.
-// Falls back to in-app banner if SW not ready or permission denied.
+// ── REMINDER SYSTEM ──
+// How it works:
+// 1. On toggle ON → ask permission → save next fire time to localStorage
+// 2. setInterval checks every 10s if it's time to fire (works while app is open)
+// 3. On visibilitychange (user returns to app) → check if overdue and fire immediately
+// 4. Sends a real Notification API notification (shows on Android status bar)
+// NOTE: True background notifications (when app fully closed) require a push server.
+// This approach fires whenever the app is open OR when user returns to it.
 
 let reminderTimer=null;
 
 function toggleReminder(){
   if(!state.reminder){
-    requestNotifPermission(granted=>{
-      state.reminder=true;
-      if(granted) scheduleSwReminder();
-      startReminderPoll();
-      save();renderReminderUI();
-      showToast('Reminders on! 💧','success');
+    if(!('Notification' in window)){
+      showToast('Notifications not supported','warn');return;
+    }
+    Notification.requestPermission().then(p=>{
+      if(p==='granted'){
+        state.reminder=true;
+        setNextReminderTime();
+        startReminderTick();
+        save();renderReminderUI();
+        showToast('Reminders on! 💧','success');
+        // Fire a test notification immediately so user knows it works
+        setTimeout(()=>{
+          new Notification('Hydrate 💧',{body:'Reminders are ON! You\'ll be notified every '+state.intervalMin+' min.',tag:'hydrate-test'});
+        },500);
+      } else {
+        // Show step-by-step guide
+        document.getElementById('notifHelpCard').style.display='block';
+        showToast('Tap "Allow" when Chrome asks!','warn');
+      }
     });
   } else {
     state.reminder=false;
-    stopReminder();
+    stopReminderTick();
     localStorage.removeItem('hydrate_next_reminder');
     save();renderReminderUI();
     showToast('Reminders off','');
   }
 }
 
-function requestNotifPermission(cb){
-  if(!('Notification' in window)){cb(false);return;}
-  if(Notification.permission==='granted'){cb(true);return;}
-  if(Notification.permission==='denied'){
-    showPermissionGuide();cb(false);return;
+function setNextReminderTime(){
+  const ms=state.intervalMs||(state.intervalMin*60*1000)||60000;localStorage.setItem("hydrate_next_reminder", Date.now()+ms);
+}
+
+function startReminderTick(){
+  stopReminderTick();
+  reminderTimer=setInterval(tickCheck, 10000); // check every 10 seconds
+}
+function stopReminderTick(){if(reminderTimer){clearInterval(reminderTimer);reminderTimer=null;}}
+
+function tickCheck(){
+  if(!state.reminder) return;
+  const next=parseInt(localStorage.getItem('hydrate_next_reminder')||'0');
+  if(next && Date.now()>=next){
+    if(!isQuietTime()) fireReminder();
+    setNextReminderTime(); // always reschedule even in quiet hours
   }
-  Notification.requestPermission().then(p=>{
-    const denied = p!=='granted';
-    const el=document.getElementById('notifBadge');
-    if(el) el.style.display=denied?'flex':'none';
-    if(denied) showPermissionGuide();
-    cb(p==='granted');
-  });
 }
 
-function showPermissionGuide(){
-  showToast('Allow notifications in Chrome settings!','warn');
-  // Show a persistent help card
-  const card=document.getElementById('notifHelpCard');
-  if(card) card.style.display='block';
+function fireReminder(){
+  const remain=Math.max(0,state.goal-todayTotal());
+  const body=remain>0?'Time to drink! '+remain+'ml left today. 💧':'You hit your goal today! 🎉';
+  if(Notification.permission==='granted'){
+    new Notification('Hydrate 💧',{
+      body,
+      tag:'hydrate-reminder',
+      renotify:true,
+      icon:document.querySelector('link[rel="icon"]')?.href||''
+    });
+  }
+  showDrinkBanner(remain);
 }
 
-function setInterval_(min){
-  state.intervalMin=min;save();
-  if(state.reminder){scheduleSwReminder();startReminderPoll();}
+function showDrinkBanner(remain){
+  let b=document.getElementById('drinkBanner');
+  if(!b){
+    b=document.createElement('div');b.id='drinkBanner';
+    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#0096c7,#48cae4);color:#fff;font-family:var(--fh);font-weight:800;font-size:0.9rem;padding:14px 16px;box-shadow:0 4px 20px rgba(0,100,160,0.35);display:flex;align-items:center;justify-content:space-between;gap:12px;';
+    document.body.appendChild(b);
+  }
+  b.innerHTML='<span>💧 '+(remain>0?'Time to drink! '+remain+'ml left':'Goal hit! 🎉')+'</span><button onclick="hideDrinkBanner()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;border-radius:8px;padding:5px 12px;cursor:pointer;font-family:var(--fh);font-weight:800;font-size:0.78rem;">OK</button>';
+  b.style.display='flex';
+  clearTimeout(b._t);b._t=setTimeout(hideDrinkBanner,12000);
+}
+function hideDrinkBanner(){const b=document.getElementById('drinkBanner');if(b)b.style.display='none';}
+
+function applyCustomInterval(){
+  const val=parseInt(document.getElementById("customIntervalVal").value);
+  const unit=document.getElementById("customIntervalUnit").value;
+  if(!val||val<1){showToast("Enter a valid number","warn");return;}
+  let ms;
+  if(unit==="sec") ms=val*1000;
+  else if(unit==="min") ms=val*60*1000;
+  else ms=val*3600*1000;
+  if(ms<5000){showToast("Minimum is 5 seconds","warn");return;}
+  state.intervalMs=ms;
+  state.intervalMin=ms/60000;
+  save();
+  if(state.reminder){setNextReminderTime();startReminderTick();}
   renderReminderUI();
+  showToast("Reminder set! 💧","success");
 }
+function quickSet(val,unit){
+  document.getElementById("customIntervalVal").value=val;
+  document.getElementById("customIntervalUnit").value=unit;
+  applyCustomInterval();
+}
+function setInterval_(min){state.intervalMs=min*60*1000;state.intervalMin=min;save();if(state.reminder){setNextReminderTime();startReminderTick();}renderReminderUI();}
+function friendlyInterval(ms){if(!ms||ms<1000)return "";if(ms<60000){const s=Math.round(ms/1000);return s+" second"+(s!==1?"s":"");}if(ms<3600000){const m=Math.round(ms/60000);return m+" minute"+(m!==1?"s":"");}const h=(ms/3600000);return (Math.round(h*10)/10)+" hour"+(h!==1?"s":"");}
 function saveQuiet(){state.quietStart=document.getElementById('quietStart').value;state.quietEnd=document.getElementById('quietEnd').value;save();showToast('Quiet hours saved','success');}
 function isQuietTime(){
   const now=new Date(),cur=now.getHours()*60+now.getMinutes();
@@ -585,66 +668,6 @@ function isQuietTime(){
   const start=sh*60+sm,end=eh*60+em;
   return start>end?cur>=start||cur<=end:cur>=start&&cur<=end;
 }
-
-// Store next reminder time in localStorage so it survives app close
-function scheduleSwReminder(){
-  const next=Date.now()+state.intervalMin*60*1000;
-  localStorage.setItem('hydrate_next_reminder',next);
-  // Tell service worker to schedule it too (works when app is closed)
-  if(navigator.serviceWorker&&navigator.serviceWorker.controller){
-    navigator.serviceWorker.controller.postMessage({
-      type:'SCHEDULE_REMINDER',
-      delayMs: state.intervalMin*60*1000,
-      body:'Time to drink! '+Math.max(0,state.goal-todayTotal())+'ml left today.',
-      intervalMin: state.intervalMin
-    });
-  }
-}
-
-function startReminderPoll(){
-  stopReminder();
-  // Poll every 30s — catches the scheduled time even if SW isn't active
-  reminderTimer=setInterval(checkReminderDue, 30000);
-}
-function stopReminder(){if(reminderTimer){clearInterval(reminderTimer);reminderTimer=null;}}
-
-function checkReminderDue(){
-  if(!state.reminder) return;
-  const next=parseInt(localStorage.getItem('hydrate_next_reminder')||'0');
-  if(next && Date.now()>=next){
-    if(!isQuietTime()) fireReminder();
-    scheduleSwReminder(); // reschedule next
-  }
-}
-
-function fireReminder(){
-  const remain=Math.max(0,state.goal-todayTotal());
-  const body=remain>0?'Time to drink! '+remain+'ml left today.':'You hit your goal today! 🎉';
-  // Real phone notification (works on Android Chrome + PWA)
-  if('Notification' in window&&Notification.permission==='granted'){
-    new Notification('Hydrate 💧',{
-      body,tag:'hydrate-reminder',renotify:true,
-      icon:document.querySelector('link[rel="icon"]')?.href||'',
-      badge:document.querySelector('link[rel="icon"]')?.href||'',
-      vibrate:[200,100,200]
-    });
-  }
-  // Always also show in-app banner as backup
-  showDrinkBanner(remain);
-}
-
-function showDrinkBanner(remain){
-  let b=document.getElementById('drinkBanner');
-  if(!b){
-    b=document.createElement('div');b.id='drinkBanner';
-    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#0096c7,#48cae4);color:#fff;font-family:var(--fh);font-weight:800;font-size:0.9rem;text-align:center;padding:14px 16px 14px;padding-top:calc(14px + env(safe-area-inset-top));box-shadow:0 4px 20px rgba(0,100,160,0.35);display:flex;align-items:center;justify-content:space-between;gap:12px;';
-    document.body.appendChild(b);
-  }
-  b.innerHTML='<span>💧 '+(remain>0?'Time to drink! '+remain+'ml left':'Goal reached! 🎉')+'</span><button onclick="hideDrinkBanner()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;border-radius:8px;padding:5px 12px;cursor:pointer;font-family:var(--fh);font-weight:800;font-size:0.78rem;">OK</button>';
-  b.style.display='flex';
-  clearTimeout(b._t);b._t=setTimeout(hideDrinkBanner,12000);
-}
-function hideDrinkBanner(){const b=document.getElementById('drinkBanner');if(b)b.style.display='none';}
 function sendReminder(){fireReminder();}
 
 function switchTab(name){
@@ -720,56 +743,13 @@ function importBackup(input){
 setInterval(()=>render(),60000);
 render();
 updateBackupLastSaved();
-if(state.reminder){ scheduleSwReminder(); startReminderPoll(); }
+if(state.reminder){ setNextReminderTime(); startReminderTick(); }
 
-// SERVICE WORKER — handles notifications even when app is in background
-if('serviceWorker' in navigator){
-  const sw=[
-    "const CACHE='hydrate-v3';",
-    "self.addEventListener('install',e=>self.skipWaiting());",
-    "self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});",
-    "self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>new Response('Offline'))));});",
-    // Listen for schedule messages from the page
-    "let _reminderTimers={};",
-    "self.addEventListener('message',e=>{",
-    "  if(e.data&&e.data.type==='SCHEDULE_REMINDER'){",
-    "    const {delayMs,body,intervalMin}=e.data;",
-    "    clearTimeout(_reminderTimers.main);",
-    "    _reminderTimers.main=setTimeout(()=>{",
-    "      self.registration.showNotification('Hydrate \uD83D\uDCA7',{",
-    "        body:body||'Time to drink water!',",
-    "        tag:'hydrate-reminder',renotify:true,",
-    "        vibrate:[200,100,200],",
-    "        actions:[{action:'log',title:'\uD83D\uDCA7 Log Water'}]",
-    "      });",
-    "    },delayMs||60000);",
-    "  }",
-    "});",
-    // Handle notification click — open/focus the app
-    "self.addEventListener('notificationclick',e=>{",
-    "  e.notification.close();",
-    "  e.waitUntil(clients.matchAll({type:'window'}).then(cs=>{",
-    "    if(cs.length)return cs[0].focus();",
-    "    return clients.openWindow('./');",
-    "  }));",
-    "});"
-  ].join('\n');
-
-  const swBlob = new Blob([sw],{type:'application/javascript'});
-  const swUrl = URL.createObjectURL(swBlob);
-  navigator.serviceWorker.register(swUrl).then(reg=>{
-    // Listen for messages from SW (future use)
-    navigator.serviceWorker.addEventListener('message',e=>{
-      if(e.data&&e.data.type==='REMINDER_FIRED') fireReminder();
-    });
-  }).catch(()=>{});
-}
-
-// Check on every app open / return from background
+// Fire immediately when user returns to app
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'&&state.reminder) checkReminderDue();
+  if(document.visibilityState==='visible' && state.reminder) tickCheck();
 });
-window.addEventListener('focus',()=>{ if(state.reminder) checkReminderDue(); });
+window.addEventListener('focus',()=>{ if(state.reminder) tickCheck(); });
 </script>
 </body>
 </html>
