@@ -374,7 +374,7 @@ header { display:flex; align-items:center; justify-content:space-between; paddin
 <script>
 const DEFAULT_SIZES=[{ml:50,label:'Shot'},{ml:100,label:'Small'},{ml:200,label:'Cup'},{ml:250,label:'Glass'},{ml:350,label:'Bottle'},{ml:500,label:'Large'}];
 function loadState(){return JSON.parse(localStorage.getItem('hydrate_state')||'null')||{goal:2000,sizes:DEFAULT_SIZES,log:[],reminder:false,intervalMin:60,quietStart:'22:00',quietEnd:'07:00',streak:0,lastStreakDate:null};}
-let state=loadState(), reminderTimer=null;
+let state=loadState();
 function save(){localStorage.setItem('hydrate_state',JSON.stringify(state));}
 function todayStr(){return new Date().toISOString().slice(0,10);}
 function todayLog(){return state.log.filter(e=>e.date===todayStr());}
@@ -520,12 +520,20 @@ function resetAll(){
 
 function toggleReminder(){
   if(!state.reminder){
-    if('Notification' in window) Notification.requestPermission().then(p=>document.getElementById('notifBadge').style.display=p==='denied'?'flex':'none');
-    state.reminder=true;startReminder();
-  } else {state.reminder=false;stopReminder();}
+    if('Notification' in window){
+      Notification.requestPermission().then(p=>{
+        document.getElementById('notifBadge').style.display=p==='denied'?'flex':'none';
+        if(p==='granted') scheduleNextNotif();
+      });
+    }
+    state.reminder=true;
+  } else {
+    state.reminder=false;
+    hideDrinkBanner();
+  }
   save();renderReminderUI();
 }
-function setInterval_(min){state.intervalMin=min;save();if(state.reminder){stopReminder();startReminder();}renderReminderUI();}
+function setInterval_(min){state.intervalMin=min;save();if(state.reminder)scheduleNextNotif();renderReminderUI();}
 function saveQuiet(){state.quietStart=document.getElementById('quietStart').value;state.quietEnd=document.getElementById('quietEnd').value;save();showToast('Quiet hours saved','success');}
 function isQuietTime(){
   const now=new Date(),cur=now.getHours()*60+now.getMinutes();
@@ -534,12 +542,77 @@ function isQuietTime(){
   const start=sh*60+sm,end=eh*60+em;
   return start>end?cur>=start||cur<=end:cur>=start&&cur<=end;
 }
-function startReminder(){stopReminder();reminderTimer=setInterval(()=>{if(!isQuietTime())sendReminder();},state.intervalMin*60*1000);}
-function stopReminder(){if(reminderTimer){clearInterval(reminderTimer);reminderTimer=null;}}
-function sendReminder(){
-  showToast('💧 Time to drink water!','warn');
-  if('Notification' in window&&Notification.permission==='granted') new Notification('Hydrate 💧',{body:'Time to drink! '+Math.max(0,state.goal-todayTotal())+'ml remaining.',tag:'hydrate'});
+
+// ── SMART REMINDER SYSTEM ──
+// Works even after tab is closed/app killed on mobile.
+// Logic: store the timestamp of the NEXT due reminder in localStorage.
+// On every app open (and every 30s while open), check if it's overdue.
+// Also fire a real browser notification if permission granted.
+
+function scheduleNextNotif(){
+  if(!state.reminder) return;
+  const nextTime = Date.now() + state.intervalMin * 60 * 1000;
+  localStorage.setItem('hydrate_next_reminder', nextTime);
 }
+
+function checkReminder(){
+  if(!state.reminder) return;
+  const next = parseInt(localStorage.getItem('hydrate_next_reminder') || '0');
+  if(!next){ scheduleNextNotif(); return; }
+  if(Date.now() >= next){
+    if(!isQuietTime()) triggerReminder();
+    scheduleNextNotif(); // schedule the next one
+  }
+}
+
+function triggerReminder(){
+  const remain = Math.max(0, state.goal - todayTotal());
+  // 1. In-app banner (works always, even if notifications are off)
+  showDrinkBanner(remain);
+  // 2. Browser notification (works if tab is open in background)
+  if('Notification' in window && Notification.permission==='granted'){
+    new Notification('Hydrate 💧', {
+      body: remain > 0 ? 'Time to drink! '+remain+'ml left today.' : "You've hit your goal! Keep it up 🎉",
+      tag:'hydrate',
+      icon: document.querySelector('link[rel="icon"]')?.href || ''
+    });
+  }
+}
+
+function showDrinkBanner(remain){
+  let banner = document.getElementById('drinkBanner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'drinkBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#0096c7,#48cae4);color:#fff;font-family:var(--fh);font-weight:800;font-size:0.9rem;text-align:center;padding:14px 16px;box-shadow:0 4px 20px rgba(0,100,160,0.35);display:flex;align-items:center;justify-content:space-between;gap:12px;animation:bannerIn 0.4s cubic-bezier(0.34,1.56,0.64,1);';
+    const style = document.createElement('style');
+    style.textContent = '@keyframes bannerIn{from{transform:translateY(-100%)}to{transform:translateY(0)}}';
+    document.head.appendChild(style);
+    document.body.appendChild(banner);
+  }
+  const msg = remain > 0 ? '💧 Time to drink! '+remain+'ml left' : '🎉 Daily goal reached!';
+  banner.innerHTML = '<span>'+msg+'</span><button onclick="hideDrinkBanner()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;border-radius:8px;padding:5px 12px;cursor:pointer;font-family:var(--fh);font-weight:800;font-size:0.78rem;">OK</button>';
+  banner.style.display='flex';
+  // Auto-hide after 10 seconds
+  clearTimeout(banner._timer);
+  banner._timer = setTimeout(hideDrinkBanner, 10000);
+}
+
+function hideDrinkBanner(){
+  const banner = document.getElementById('drinkBanner');
+  if(banner) banner.style.display='none';
+}
+
+// Check on every app open + every 30s while open
+function startReminderChecker(){
+  checkReminder();
+  if(reminderTimer) clearInterval(reminderTimer);
+  reminderTimer = setInterval(checkReminder, 30000);
+}
+function stopReminder(){if(reminderTimer){clearInterval(reminderTimer);reminderTimer=null;}}
+// Keep old name for compat
+function startReminder(){ scheduleNextNotif(); startReminderChecker(); }
+function sendReminder(){ triggerReminder(); }
 
 function switchTab(name){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -612,9 +685,19 @@ function importBackup(input){
 
 // INIT
 setInterval(()=>render(),60000);
-if(state.reminder)startReminder();
 render();
 updateBackupLastSaved();
+
+// Start reminder checker
+let reminderTimer = null;
+if(state.reminder) startReminderChecker();
+else if(!localStorage.getItem('hydrate_next_reminder')) scheduleNextNotif();
+
+// Re-check whenever user comes BACK to the app (tab/app switch)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && state.reminder) checkReminder();
+});
+window.addEventListener('focus', ()=>{ if(state.reminder) checkReminder(); });
 
 // SERVICE WORKER
 if('serviceWorker' in navigator){
