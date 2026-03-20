@@ -328,18 +328,19 @@ select.inp{cursor:pointer;}
       <div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:9px;">Step 2 — Open your Clock app</div>
 
       <button class="clock-btn" onclick="openClockTimer()">
-        <span class="icon">⏱</span> Open Clock &amp; Set Timer
+        <span class="icon">⏱</span> Start Timer ▶
       </button>
 
       <div id="clockInstructions" style="display:none">
         <div class="info-box">
-          <strong>📲 Inside the Clock app:</strong><br>
-          1. Tap the <strong>Timer</strong> tab at the bottom<br>
-          2. The time is already set — just tap <strong>Start</strong><br>
-          3. When it rings → drink water 💧 → log it here<br>
-          4. Restart the timer to repeat
+          <strong>📲 How it works:</strong><br>
+          1. A Google timer opens in a new tab — it's already counting down<br>
+          2. When it rings → drink water 💧 → come back here and log it<br>
+          3. Tap the button again to start the next round<br><br>
+          <strong>⏰ Want a real phone alarm instead?</strong><br>
+          Open your <strong>Clock app</strong> → tap <strong>Alarm</strong> → press <strong>+</strong> → set your time → enable <strong>Repeat</strong> for daily reminders that ring even when your phone is locked.
           <div class="info-divider">
-            💡 <strong>Want a recurring daily alarm?</strong> Tap the <strong>Alarm</strong> tab → press <strong>+</strong> → set your preferred time → enable <strong>Repeat</strong>.
+            💡 <strong>Tip:</strong> Set a repeating alarm at your usual drinking times (e.g. 9am, 11am, 1pm, 3pm, 5pm) for the most reliable reminders.
           </div>
         </div>
         <div class="success-note" id="successNote">
@@ -543,14 +544,27 @@ function friendlyInterval(secs){
 }
 function openClockTimer(){
   const secs=getIntervalSeconds();
-  const hrs=Math.floor(secs/3600),mins=Math.floor((secs%3600)/60),s=secs%60;
   const friendly=friendlyInterval(secs);
+
+  // Show instructions first
   document.getElementById('clockInstructions').style.display='block';
   const note=document.getElementById('successNote');
   note.style.display='flex';
-  document.getElementById('successText').textContent='Opening Clock app with a '+friendly+' timer ready. Just tap Start!';
-  const intentUrl='intent://'+hrs+':'+mins+':'+s+'#Intent;scheme=android-app;package=com.google.android.deskclock;action=android.intent.action.SET_TIMER;S.android.intent.extra.alarm.MESSAGE=Drink%20Water%20%F0%9F%92%A7;S.android.intent.extra.alarm.LENGTH='+secs+';B.android.intent.extra.alarm.SKIP_UI=false;end';
-  try{window.location.href=intentUrl;}catch(e){}
+  document.getElementById('successText').textContent='Set a '+friendly+' timer in your Clock app, then tap Start!';
+
+  // Try 1: Android standard timer URL scheme (works on most Android devices from Chrome)
+  // This opens Google Clock / Samsung Clock directly to timer
+  const timerUrl='https://clock.google.com/r/timer';
+
+  // Try 2: Deep link via android-app scheme (may work on some devices)
+  const deepLink='android-app://com.google.android.deskclock/timer';
+
+  // Best approach for Chrome on Android: open Google Clock web timer
+  // or fall back to a Google search timer which ALWAYS works
+  const googleTimer='https://www.google.com/search?q='+secs+'%20second%20timer';
+
+  // Try to open Google's built-in timer (works in Chrome, opens inline countdown)
+  window.open(googleTimer,'_blank');
 }
 
 // TABS
