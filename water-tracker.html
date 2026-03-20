@@ -167,6 +167,16 @@ select.inp{cursor:pointer;}
 .ring-msg{font-size:.88rem;font-weight:800;color:var(--success);}
 .ring-sub{font-size:.72rem;color:var(--text2);margin-top:3px;}
 
+/* TONE SELECTOR */
+.tone-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:10px;}
+.tone-btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;background:rgba(255,255,255,.75);border:1.5px solid var(--border);border-radius:13px;cursor:pointer;transition:all .16s;user-select:none;}
+.tone-btn:active{transform:scale(.93);}
+.tone-btn.active{background:rgba(3,105,161,.08);border-color:var(--blue-dark);}
+.tone-icon{font-size:1.3rem;line-height:1;}
+.tone-name{font-size:.64rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;}
+.tone-btn.active .tone-name{color:var(--blue-dark);}
+.tone-preview-btn{width:100%;padding:9px;margin-bottom:14px;background:rgba(255,255,255,.75);border:1.5px solid var(--border2);border-radius:11px;font-family:var(--f);font-size:.78rem;font-weight:700;color:var(--blue-dark);cursor:pointer;transition:all .16s;}
+.tone-preview-btn:active{background:rgba(3,105,161,.08);}
 /* BACKUP */
 .file-label{display:block;width:100%;background:rgba(255,255,255,.7);border:2px dashed var(--border2);border-radius:12px;padding:12px;text-align:center;cursor:pointer;font-weight:700;font-size:.8rem;color:var(--muted);transition:all .18s;}
 .file-label:active{border-color:var(--blue);color:var(--blue);}
@@ -335,6 +345,30 @@ select.inp{cursor:pointer;}
         <div class="pill" onclick="quickPick(1,'hr',this)">1 hour</div>
         <div class="pill" onclick="quickPick(2,'hr',this)">2 hours</div>
       </div>
+
+      <!-- Tone selector -->
+      <div style="font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Alarm Tone</div>
+      <div class="tone-grid" id="toneGrid">
+        <div class="tone-btn active" data-tone="beep" onclick="selectTone('beep',this)">
+          <span class="tone-icon">🔔</span><span class="tone-name">Beep</span>
+        </div>
+        <div class="tone-btn" data-tone="siren" onclick="selectTone('siren',this)">
+          <span class="tone-icon">🚨</span><span class="tone-name">Siren</span>
+        </div>
+        <div class="tone-btn" data-tone="alarm" onclick="selectTone('alarm',this)">
+          <span class="tone-icon">⏰</span><span class="tone-name">Alarm</span>
+        </div>
+        <div class="tone-btn" data-tone="trumpet" onclick="selectTone('trumpet',this)">
+          <span class="tone-icon">🎺</span><span class="tone-name">Trumpet</span>
+        </div>
+        <div class="tone-btn" data-tone="buzz" onclick="selectTone('buzz',this)">
+          <span class="tone-icon">📳</span><span class="tone-name">Buzz</span>
+        </div>
+        <div class="tone-btn" data-tone="ping" onclick="selectTone('ping',this)">
+          <span class="tone-icon">✨</span><span class="tone-name">Ping</span>
+        </div>
+      </div>
+      <button class="tone-preview-btn" onclick="previewTone()">▶ Preview Tone</button>
 
       <!-- Ring countdown -->
       <div class="timer-ring-wrap">
@@ -645,48 +679,114 @@ function timerDone(){
   document.getElementById('timerRinging').style.display='block';
   const btn=document.getElementById('timerStartBtn');
   if(btn){btn.textContent='▶ Start';btn.className='t-btn start';}
-  // Play alarm sound using Web Audio API — no file needed
   playAlarm();
-  // Vibrate phone if supported
-  if(navigator.vibrate)navigator.vibrate([400,150,400,150,600]);
+  if(navigator.vibrate)navigator.vibrate([500,200,500,200,800,200,800]);
 }
-function playAlarm(){
+
+// ── TONE ENGINE ──
+let currentTone='beep';
+function selectTone(name,el){
+  currentTone=name;
+  document.querySelectorAll('.tone-btn').forEach(b=>b.classList.remove('active'));
+  if(el)el.classList.add('active');
+}
+function previewTone(){playTone(currentTone);}
+function playAlarm(){playTone(currentTone);}
+
+function getAudioCtx(){return new(window.AudioContext||window.webkitAudioContext)();}
+
+function playTone(name){
   try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const beeps=[
-      {freq:880,start:0,dur:0.18},
-      {freq:880,start:0.22,dur:0.18},
-      {freq:1100,start:0.44,dur:0.35},
-    ];
-    beeps.forEach(b=>{
-      const osc=ctx.createOscillator();
-      const gain=ctx.createGain();
-      osc.connect(gain);gain.connect(ctx.destination);
-      osc.type='sine';osc.frequency.value=b.freq;
-      gain.gain.setValueAtTime(0,ctx.currentTime+b.start);
-      gain.gain.linearRampToValueAtTime(0.5,ctx.currentTime+b.start+0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+b.start+b.dur);
-      osc.start(ctx.currentTime+b.start);
-      osc.stop(ctx.currentTime+b.start+b.dur+0.05);
-    });
-    // Repeat 3 times
-    setTimeout(()=>playAlarmOnce(ctx,0.5),700);
-    setTimeout(()=>playAlarmOnce(ctx,0),1400);
-  }catch(e){}
+    const ctx=getAudioCtx();
+    const t=ctx.currentTime;
+    if(name==='beep')       toneBeep(ctx,t);
+    else if(name==='siren') toneSiren(ctx,t);
+    else if(name==='alarm') toneAlarm(ctx,t);
+    else if(name==='trumpet') toneTrumpet(ctx,t);
+    else if(name==='buzz')  toneBuzz(ctx,t);
+    else if(name==='ping')  tonePing(ctx,t);
+  }catch(e){console.warn('Audio error',e);}
 }
-function playAlarmOnce(ctx,delay){
-  const beeps=[{freq:880,start:delay,dur:0.18},{freq:880,start:delay+0.22,dur:0.18},{freq:1100,start:delay+0.44,dur:0.35}];
-  beeps.forEach(b=>{
-    try{
-      const osc=ctx.createOscillator(),gain=ctx.createGain();
-      osc.connect(gain);gain.connect(ctx.destination);
-      osc.type='sine';osc.frequency.value=b.freq;
-      gain.gain.setValueAtTime(0,ctx.currentTime+b.start);
-      gain.gain.linearRampToValueAtTime(0.5,ctx.currentTime+b.start+0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+b.start+b.dur);
-      osc.start(ctx.currentTime+b.start);
-      osc.stop(ctx.currentTime+b.start+b.dur+0.05);
-    }catch(e){}
+
+function makeOsc(ctx,type,freq,startT,endT,vol){
+  const osc=ctx.createOscillator();
+  const gain=ctx.createGain();
+  osc.connect(gain);gain.connect(ctx.destination);
+  osc.type=type;osc.frequency.value=freq;
+  gain.gain.setValueAtTime(0,startT);
+  gain.gain.linearRampToValueAtTime(vol,startT+0.01);
+  gain.gain.setValueAtTime(vol,endT-0.02);
+  gain.gain.linearRampToValueAtTime(0,endT);
+  osc.start(startT);osc.stop(endT+0.05);
+  return{osc,gain};
+}
+
+// 🔔 BEEP — classic sharp double-beep, loud
+function toneBeep(ctx,t){
+  for(let i=0;i<3;i++){
+    makeOsc(ctx,'square',1000,t+i*0.35,t+i*0.35+0.18,0.7);
+    makeOsc(ctx,'square',1500,t+i*0.35,t+i*0.35+0.18,0.4);
+  }
+}
+
+// 🚨 SIREN — wailing up-down frequency sweep, very loud
+function toneSiren(ctx,t){
+  const osc=ctx.createOscillator();
+  const gain=ctx.createGain();
+  osc.connect(gain);gain.connect(ctx.destination);
+  osc.type='sawtooth';
+  gain.gain.setValueAtTime(0.8,t);
+  // Sweep up and down 4 times
+  for(let i=0;i<4;i++){
+    osc.frequency.setValueAtTime(400,t+i*0.5);
+    osc.frequency.linearRampToValueAtTime(1200,t+i*0.5+0.25);
+    osc.frequency.linearRampToValueAtTime(400,t+i*0.5+0.5);
+  }
+  osc.start(t);osc.stop(t+2.05);
+}
+
+// ⏰ ALARM — repeating pulse like a real alarm clock
+function toneAlarm(ctx,t){
+  for(let i=0;i<8;i++){
+    const on=t+i*0.22;
+    makeOsc(ctx,'square',800,on,on+0.12,0.7);
+    makeOsc(ctx,'square',1000,on,on+0.12,0.5);
+  }
+}
+
+// 🎺 TRUMPET — rising fanfare notes, loud and bright
+function toneTrumpet(ctx,t){
+  const notes=[523,659,784,1047];
+  notes.forEach((freq,i)=>{
+    makeOsc(ctx,'sawtooth',freq,t+i*0.18,t+i*0.18+0.22,0.65);
+    makeOsc(ctx,'square',freq*2,t+i*0.18,t+i*0.18+0.22,0.2);
+  });
+  // Final sustained high note
+  makeOsc(ctx,'sawtooth',1047,t+0.8,t+1.4,0.7);
+}
+
+// 📳 BUZZ — harsh buzzer, extremely loud and attention-grabbing
+function toneBuzz(ctx,t){
+  for(let i=0;i<5;i++){
+    const on=t+i*0.28;
+    makeOsc(ctx,'sawtooth',160,on,on+0.18,0.9);
+    makeOsc(ctx,'square',320,on,on+0.18,0.6);
+    makeOsc(ctx,'sawtooth',640,on,on+0.18,0.3);
+  }
+}
+
+// ✨ PING — bright high chime, 3 ascending notes
+function tonePing(ctx,t){
+  const notes=[1047,1319,1568,2093];
+  notes.forEach((freq,i)=>{
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain);gain.connect(ctx.destination);
+    osc.type='sine';osc.frequency.value=freq;
+    gain.gain.setValueAtTime(0,t+i*0.22);
+    gain.gain.linearRampToValueAtTime(0.8,t+i*0.22+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001,t+i*0.22+0.6);
+    osc.start(t+i*0.22);osc.stop(t+i*0.22+0.65);
   });
 }
 
