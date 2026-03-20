@@ -147,15 +147,25 @@ select.inp{cursor:pointer;}
 .pill.active,.pill:active{background:var(--blue-dark);border-color:var(--blue-dark);color:#fff;box-shadow:0 2px 8px rgba(3,105,161,.3);}
 
 /* CLOCK BUTTON */
-.clock-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:16px;margin-top:4px;background:linear-gradient(135deg,#0369a1,#0ea5e9);color:#fff;border:none;border-radius:16px;cursor:pointer;font-family:var(--f);font-weight:800;font-size:1rem;letter-spacing:.2px;box-shadow:0 6px 20px rgba(3,105,161,.32);transition:transform .15s,box-shadow .15s;}
-.clock-btn:active{transform:scale(.97);box-shadow:0 3px 10px rgba(3,105,161,.22);}
-.clock-btn .icon{font-size:1.3rem;}
-
-/* INFO BOX */
-.info-box{margin-top:13px;background:rgba(14,165,233,.06);border:1.5px solid rgba(14,165,233,.18);border-radius:14px;padding:14px;font-size:.78rem;color:var(--text2);line-height:1.85;}
-.info-box strong{color:var(--blue-dark);}
-.info-divider{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border2);font-size:.74rem;color:var(--muted);}
-.success-note{display:none;margin-top:10px;background:rgba(16,185,129,.07);border:1.5px solid rgba(16,185,129,.25);border-radius:12px;padding:10px 13px;font-size:.76rem;color:var(--success);font-weight:600;line-height:1.6;gap:7px;align-items:flex-start;}
+/* TIMER */
+.timer-ring-wrap{position:relative;width:160px;height:160px;margin:16px auto 12px;}
+.timer-ring-wrap svg{width:160px;height:160px;transform:rotate(-90deg);}
+.timer-track{fill:none;stroke:rgba(14,165,233,.12);stroke-width:10;}
+.timer-arc{fill:none;stroke:url(#tg);stroke-width:10;stroke-linecap:round;transition:stroke-dashoffset .9s linear;}
+.timer-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.timer-display{font-size:1.9rem;font-weight:800;color:var(--blue-dark);letter-spacing:-1px;line-height:1;}
+.timer-label{font-size:.65rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-top:4px;}
+.timer-controls{display:flex;gap:8px;}
+.t-btn{flex:1;padding:13px 10px;border:none;border-radius:14px;font-family:var(--f);font-weight:800;font-size:.88rem;cursor:pointer;transition:all .15s;}
+.t-btn:active{transform:scale(.95);}
+.t-btn.start{background:linear-gradient(135deg,var(--blue-dark),var(--blue-mid));color:#fff;box-shadow:0 4px 14px rgba(3,105,161,.3);}
+.t-btn.pause{background:linear-gradient(135deg,var(--warn),#fb923c);color:#fff;box-shadow:0 4px 14px rgba(245,158,11,.3);}
+.t-btn.reset{background:rgba(255,255,255,.8);border:1.5px solid var(--border2);color:var(--muted);}
+.timer-ringing{display:none;margin-top:10px;background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(16,185,129,.05));border:1.5px solid rgba(16,185,129,.3);border-radius:14px;padding:13px;text-align:center;animation:pulse 1s ease infinite;}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.02);}}
+.ring-emoji{font-size:1.8rem;display:block;margin-bottom:4px;}
+.ring-msg{font-size:.88rem;font-weight:800;color:var(--success);}
+.ring-sub{font-size:.72rem;color:var(--text2);margin-top:3px;}
 
 /* BACKUP */
 .file-label{display:block;width:100%;background:rgba(255,255,255,.7);border:2px dashed var(--border2);border-radius:12px;padding:12px;text-align:center;cursor:pointer;font-weight:700;font-size:.8rem;color:var(--muted);transition:all .18s;}
@@ -302,14 +312,15 @@ select.inp{cursor:pointer;}
     </div>
 
     <div class="card">
-      <div class="card-title">💧 Set a Reminder</div>
-      <div class="card-desc">Use your phone's Clock app for reliable reminders. It works even when your screen is off or the app is closed.</div>
+      <div class="card-title">⏱ Water Timer</div>
+      <div class="card-desc">Built-in countdown timer with sound. Pick an interval, tap Start — it rings when it's time to drink.</div>
 
-      <div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:9px;">Step 1 — How often?</div>
-
+      <!-- Interval picker -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-        <input id="customIntervalVal" class="inp" type="number" min="1" max="999" placeholder="30" style="width:75px;flex-shrink:0;text-align:center;font-weight:800;font-size:1.1rem;">
-        <select id="customIntervalUnit" class="inp">
+        <input id="customIntervalVal" class="inp" type="number" min="1" max="999" placeholder="30"
+          style="width:75px;flex-shrink:0;text-align:center;font-weight:800;font-size:1.1rem;"
+          oninput="timerResetOnChange()">
+        <select id="customIntervalUnit" class="inp" onchange="timerResetOnChange()">
           <option value="sec">Seconds</option>
           <option value="min" selected>Minutes</option>
           <option value="hr">Hours</option>
@@ -325,27 +336,36 @@ select.inp{cursor:pointer;}
         <div class="pill" onclick="quickPick(2,'hr',this)">2 hours</div>
       </div>
 
-      <div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:9px;">Step 2 — Open your Clock app</div>
-
-      <button class="clock-btn" onclick="openClockTimer()">
-        <span class="icon">⏱</span> Start Timer ▶
-      </button>
-
-      <div id="clockInstructions" style="display:none">
-        <div class="info-box">
-          <strong>📲 How it works:</strong><br>
-          1. A Google timer opens in a new tab — it's already counting down<br>
-          2. When it rings → drink water 💧 → come back here and log it<br>
-          3. Tap the button again to start the next round<br><br>
-          <strong>⏰ Want a real phone alarm instead?</strong><br>
-          Open your <strong>Clock app</strong> → tap <strong>Alarm</strong> → press <strong>+</strong> → set your time → enable <strong>Repeat</strong> for daily reminders that ring even when your phone is locked.
-          <div class="info-divider">
-            💡 <strong>Tip:</strong> Set a repeating alarm at your usual drinking times (e.g. 9am, 11am, 1pm, 3pm, 5pm) for the most reliable reminders.
-          </div>
+      <!-- Ring countdown -->
+      <div class="timer-ring-wrap">
+        <svg viewBox="0 0 160 160">
+          <defs>
+            <linearGradient id="tg" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#0369a1"/>
+              <stop offset="100%" stop-color="#38bdf8"/>
+            </linearGradient>
+          </defs>
+          <circle class="timer-track" cx="80" cy="80" r="70"/>
+          <circle class="timer-arc" id="timerArc" cx="80" cy="80" r="70"/>
+        </svg>
+        <div class="timer-center">
+          <div class="timer-display" id="timerDisplay">--:--</div>
+          <div class="timer-label" id="timerLabel">ready</div>
         </div>
-        <div class="success-note" id="successNote">
-          <span>✅</span><span id="successText"></span>
-        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="timer-controls">
+        <button class="t-btn start" id="timerStartBtn" onclick="timerStart()">▶ Start</button>
+        <button class="t-btn reset" id="timerResetBtn" onclick="timerReset()">↺ Reset</button>
+      </div>
+
+      <!-- Ringing alert -->
+      <div class="timer-ringing" id="timerRinging">
+        <span class="ring-emoji">💧</span>
+        <div class="ring-msg">Time to drink water!</div>
+        <div class="ring-sub">Tap a water button above to log it</div>
+        <button class="t-btn start" style="margin-top:10px;max-width:200px;margin-left:auto;margin-right:auto;display:block;" onclick="timerRestart()">▶ Start Again</button>
       </div>
     </div>
 
@@ -522,12 +542,16 @@ function resetAll(){
   else{el.textContent='Tap again to confirm';el.dataset.confirm='1';setTimeout(()=>{el.textContent='Clear All Data';el.dataset.confirm='0';},3000);}
 }
 
-// REMINDERS
+// ── BUILT-IN TIMER ──
+let timerTotal=0,timerLeft=0,timerTick=null,timerRunning=false;
+const CIRCUM=2*Math.PI*70; // r=70
+
 function quickPick(val,unit,el){
   document.getElementById('customIntervalVal').value=val;
   document.getElementById('customIntervalUnit').value=unit;
   document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
   if(el)el.classList.add('active');
+  timerResetOnChange();
 }
 function getIntervalSeconds(){
   const val=parseInt(document.getElementById('customIntervalVal').value)||30;
@@ -542,29 +566,128 @@ function friendlyInterval(secs){
   if(secs<3600){const m=Math.round(secs/60);return m+' minute'+(m!==1?'s':'');}
   const h=Math.round(secs/3600*10)/10;return h+' hour'+(h!==1?'s':'');
 }
-function openClockTimer(){
-  const secs=getIntervalSeconds();
-  const friendly=friendlyInterval(secs);
-
-  // Show instructions first
-  document.getElementById('clockInstructions').style.display='block';
-  const note=document.getElementById('successNote');
-  note.style.display='flex';
-  document.getElementById('successText').textContent='Set a '+friendly+' timer in your Clock app, then tap Start!';
-
-  // Try 1: Android standard timer URL scheme (works on most Android devices from Chrome)
-  // This opens Google Clock / Samsung Clock directly to timer
-  const timerUrl='https://clock.google.com/r/timer';
-
-  // Try 2: Deep link via android-app scheme (may work on some devices)
-  const deepLink='android-app://com.google.android.deskclock/timer';
-
-  // Best approach for Chrome on Android: open Google Clock web timer
-  // or fall back to a Google search timer which ALWAYS works
-  const googleTimer='https://www.google.com/search?q='+secs+'%20second%20timer';
-
-  // Try to open Google's built-in timer (works in Chrome, opens inline countdown)
-  window.open(googleTimer,'_blank');
+function fmtTime(s){
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  if(h>0)return h+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+  return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+}
+function setArc(pct){
+  const arc=document.getElementById('timerArc');
+  if(!arc)return;
+  arc.style.strokeDasharray=CIRCUM;
+  arc.style.strokeDashoffset=CIRCUM*(1-pct);
+}
+function timerResetOnChange(){
+  if(timerRunning)timerStop();
+  timerTotal=0;timerLeft=0;
+  const el=document.getElementById('timerDisplay');
+  if(el)el.textContent='--:--';
+  const lb=document.getElementById('timerLabel');
+  if(lb)lb.textContent='ready';
+  setArc(1);
+  document.getElementById('timerRinging').style.display='none';
+  const btn=document.getElementById('timerStartBtn');
+  if(btn){btn.textContent='▶ Start';btn.className='t-btn start';}
+}
+function timerStart(){
+  if(timerRunning){timerPause();return;}
+  document.getElementById('timerRinging').style.display='none';
+  if(!timerLeft||timerLeft<=0){
+    timerTotal=getIntervalSeconds();
+    if(!timerTotal||timerTotal<1){showToast('Pick a time first','warn');return;}
+    timerLeft=timerTotal;
+  }
+  timerRunning=true;
+  const btn=document.getElementById('timerStartBtn');
+  if(btn){btn.textContent='⏸ Pause';btn.className='t-btn pause';}
+  document.getElementById('timerLabel').textContent='counting down';
+  timerTick=setInterval(()=>{
+    timerLeft--;
+    document.getElementById('timerDisplay').textContent=fmtTime(timerLeft);
+    setArc(timerLeft/timerTotal);
+    document.getElementById('timerLabel').textContent=fmtTime(timerLeft)+' left';
+    if(timerLeft<=0){timerDone();}
+  },1000);
+  // Show immediately
+  document.getElementById('timerDisplay').textContent=fmtTime(timerLeft);
+  setArc(timerLeft/timerTotal);
+}
+function timerPause(){
+  timerRunning=false;
+  clearInterval(timerTick);timerTick=null;
+  const btn=document.getElementById('timerStartBtn');
+  if(btn){btn.textContent='▶ Resume';btn.className='t-btn start';}
+  document.getElementById('timerLabel').textContent='paused';
+}
+function timerStop(){
+  timerRunning=false;
+  clearInterval(timerTick);timerTick=null;
+}
+function timerReset(){
+  timerStop();timerLeft=0;timerTotal=0;timerRunning=false;
+  document.getElementById('timerDisplay').textContent='--:--';
+  document.getElementById('timerLabel').textContent='ready';
+  document.getElementById('timerRinging').style.display='none';
+  const btn=document.getElementById('timerStartBtn');
+  if(btn){btn.textContent='▶ Start';btn.className='t-btn start';}
+  setArc(1);
+}
+function timerRestart(){
+  document.getElementById('timerRinging').style.display='none';
+  timerLeft=timerTotal;timerRunning=false;
+  timerStart();
+}
+function timerDone(){
+  timerStop();timerRunning=false;
+  setArc(0);
+  document.getElementById('timerDisplay').textContent='00:00';
+  document.getElementById('timerLabel').textContent='done!';
+  document.getElementById('timerRinging').style.display='block';
+  const btn=document.getElementById('timerStartBtn');
+  if(btn){btn.textContent='▶ Start';btn.className='t-btn start';}
+  // Play alarm sound using Web Audio API — no file needed
+  playAlarm();
+  // Vibrate phone if supported
+  if(navigator.vibrate)navigator.vibrate([400,150,400,150,600]);
+}
+function playAlarm(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const beeps=[
+      {freq:880,start:0,dur:0.18},
+      {freq:880,start:0.22,dur:0.18},
+      {freq:1100,start:0.44,dur:0.35},
+    ];
+    beeps.forEach(b=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.type='sine';osc.frequency.value=b.freq;
+      gain.gain.setValueAtTime(0,ctx.currentTime+b.start);
+      gain.gain.linearRampToValueAtTime(0.5,ctx.currentTime+b.start+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+b.start+b.dur);
+      osc.start(ctx.currentTime+b.start);
+      osc.stop(ctx.currentTime+b.start+b.dur+0.05);
+    });
+    // Repeat 3 times
+    setTimeout(()=>playAlarmOnce(ctx,0.5),700);
+    setTimeout(()=>playAlarmOnce(ctx,0),1400);
+  }catch(e){}
+}
+function playAlarmOnce(ctx,delay){
+  const beeps=[{freq:880,start:delay,dur:0.18},{freq:880,start:delay+0.22,dur:0.18},{freq:1100,start:delay+0.44,dur:0.35}];
+  beeps.forEach(b=>{
+    try{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.type='sine';osc.frequency.value=b.freq;
+      gain.gain.setValueAtTime(0,ctx.currentTime+b.start);
+      gain.gain.linearRampToValueAtTime(0.5,ctx.currentTime+b.start+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+b.start+b.dur);
+      osc.start(ctx.currentTime+b.start);
+      osc.stop(ctx.currentTime+b.start+b.dur+0.05);
+    }catch(e){}
+  });
 }
 
 // TABS
